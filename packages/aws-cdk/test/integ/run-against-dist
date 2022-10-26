@@ -5,8 +5,9 @@ set -eu
 
 export VERSION=$(node -pe "require('./build.json').version")
 
-# The package MUST be 'npm install'ed (because its devDependencies are not up on NPMJS) but it may not
-# live in a 'node_modules' directory because Jest 27 does not support that. Do contortions.
+# The package MUST be 'npm install'ed from the package repository (`npm install --production`
+# will not work because that will resolve devDependencies even though it will not install them),
+# but it may not live in a 'node_modules' directory because Jest 27 does not support that. Do contortions.
 export INTEG_TOOLS=cli_integ
 rm -rf $INTEG_TOOLS && mkdir $INTEG_TOOLS
 npm install --prefix $INTEG_TOOLS --no-save ./js/aws-cdk-testing-cli-integ-*.tgz

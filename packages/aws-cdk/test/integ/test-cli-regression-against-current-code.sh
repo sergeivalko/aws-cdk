@@ -8,17 +8,21 @@ previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --
 echo "Running tests from: $previous"
 
 # Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
-testball=$(npm pack @aws-cdk-testing/cli-integ@$previous) || {
+testball=$(npm view @aws-cdk-testing/cli-integ@$previous) || {
     echo "During migration, @aws-cdk-testing/cli-integ@$previous does not exist yet." >&2
     exit 0
 }
 
-mkdir old_tests
-tar xzvf "${testball}" -C old_tests --strip 1
-(cd old_tests && npm install --production)
+# The package MUST be 'npm install'ed from the package repository (`npm install --production`
+# will not work because that will resolve devDependencies even though it will not install them),
+# but it may not live in a 'node_modules' directory because Jest 27 does not support that. Do contortions.
+export OLD_TESTS=old_tests
+rm -rf $OLD_TESTS && mkdir $OLD_TESTS
+npm install --prefix $OLD_TESTS --no-save @aws-cdk-testing/cli-integ@$previous
+mv $($OLD_TESTS/node_modules/.bin/test-root)/* $OLD_TESTS
 
 # Apply new patches to old tests
-${INTEG_TOOLS}/bin/apply-patches $previous old_tests
+${INTEG_TOOLS}/bin/apply-patches $previous $OLD_TESTS
 
 # Old tests, new CLI, new framework
-exec old_tests/bin/run-suite --use-version=$VERSION cli-integ-tests
+exec $OLD_TESTS/bin/run-suite --use-version=$VERSION cli-integ-tests
