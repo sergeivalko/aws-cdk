@@ -1,12 +1,18 @@
 /* eslint-disable no-console */
-import * as path from 'path';
 import { writeFile } from '../files';
 import { shell } from '../shell';
 import { LoginInformation } from './codeartifact';
 import { parallelShell } from './parallel-shell';
+import { UsageDir } from './usage-dir';
 
-export async function uploadDotnetPackages(packages: string[], login: LoginInformation, usageDir: string) {
-  await writeNuGetConfigFile('NuGet.Config', login);
+export async function nugetLogin(login: LoginInformation, usageDir: UsageDir) {
+  // NuGet.Config MUST live in the current directory or in the home directory, and there is no environment
+  // variable to configure its location.
+  await writeNuGetConfigFile(usageDir.cwdFile('NuGet.Config'), login);
+}
+
+export async function uploadDotnetPackages(packages: string[], usageDir: UsageDir) {
+  await usageDir.copyCwdFileHere('NuGet.Config');
 
   await parallelShell(packages, async (pkg, output) => {
     console.log(`⏳ ${pkg}`);
@@ -31,10 +37,6 @@ export async function uploadDotnetPackages(packages: string[], login: LoginInfor
     }
     return false;
   });
-
-  // NuGet.Config MUST live in the current directory or in the home directory, and there is no environment
-  // variable to configure its location.
-  await writeNuGetConfigFile(path.join(usageDir, 'cwd', 'NuGet.Config'), login);
 }
 
 async function writeNuGetConfigFile(filename: string, login: LoginInformation) {

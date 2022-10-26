@@ -4,9 +4,20 @@ import { writeFile } from '../files';
 import { shell } from '../shell';
 import { LoginInformation } from './codeartifact';
 import { parallelShell } from './parallel-shell';
-import { addToEnvFile } from './usage-dir';
+import { UsageDir } from './usage-dir';
 
-export async function uploadPythonPackages(packages: string[], login: LoginInformation, usageDir: string) {
+export async function pypiLogin(login: LoginInformation, usageDir: UsageDir) {
+  // Write pip config file and set environment var
+  await writeFile(path.join(usageDir.directory, 'pip.conf'), [
+    '[global]',
+    `index-url = https://aws:${login.authToken}@${login.pypiEndpoint.replace(/^https:\/\//, '')}simple/`,
+  ].join('\n'));
+  await usageDir.addToEnv({
+    PIP_CONFIG_FILE: `${usageDir}/pip.conf`,
+  });
+}
+
+export async function uploadPythonPackages(packages: string[], login: LoginInformation) {
   await shell(['pip', 'install', 'twine'], { show: 'error' });
 
   // Even though twine supports uploading all packages in one go, we have to upload them
@@ -32,11 +43,4 @@ export async function uploadPythonPackages(packages: string[], login: LoginInfor
     }
     return false;
   });
-
-  // Write pip config file and set environment var
-  await writeFile(path.join(usageDir, 'pip.conf'), [
-    '[global]',
-    `index-url = https://aws:${login.authToken}@${login.pypiEndpoint.replace(/^https:\/\//, '')}simple/`,
-  ].join('\n'));
-  await addToEnvFile(usageDir, 'PIP_CONFIG_FILE', `${usageDir}/pip.conf`);
 }

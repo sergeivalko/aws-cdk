@@ -52,3 +52,29 @@ export function findUp(name: string, directory: string = process.cwd()): string 
 export function homeDir() {
   return os.userInfo().homedir ?? os.homedir();
 }
+
+export async function loadLines(filename: string): Promise<string[]> {
+  return await fs.pathExists(filename) ? (await fs.readFile(filename, { encoding: 'utf-8' })).split('\n') : [];
+}
+
+export async function writeLines(filename: string, lines: string[]) {
+  await fs.writeFile(filename, lines.join('\n'), { encoding: 'utf-8' });
+}
+
+/**
+ * Update a spaceless ini file in place
+ */
+export function updateIniKey(lines: string[], key: string, value: string) {
+  const prefix = `${key}=`;
+  let found = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(prefix)) {
+      lines[i] = prefix + value;
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    lines.push(prefix + value);
+  }
+}

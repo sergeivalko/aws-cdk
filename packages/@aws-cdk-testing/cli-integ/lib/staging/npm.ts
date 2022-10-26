@@ -1,25 +1,34 @@
 /* eslint-disable no-console */
 import * as path from 'path';
-import * as fs from 'fs-extra';
-import { homeDir } from '../files';
+import { homeDir, updateIniKey, loadLines, writeLines } from '../files';
 import { shell } from '../shell';
 import { LoginInformation } from './codeartifact';
 import { parallelShell } from './parallel-shell';
-import { addToEnvFile } from './usage-dir';
+import { UsageDir } from './usage-dir';
 
-export async function uploadNpmPackages(packages: string[], login: LoginInformation, usageDir: string) {
+export async function npmLogin(login: LoginInformation, usageDir: UsageDir) {
   // Creating an ~/.npmrc that references an envvar is what you're supposed to do. (https://docs.npmjs.com/private-modules/ci-server-config)
   await writeNpmLoginToken(login.npmEndpoint, '${NPM_TOKEN}');
 
+  // Add variables to env file
+  await usageDir.addToEnv(npmEnv(login));
+}
+
+function npmEnv(login: LoginInformation) {
+  return {
+    npm_config_registry: login.npmEndpoint,
+    npm_config_always_auth: 'true', // Necessary for NPM 6, otherwise it will sometimes not pass the token
+    NPM_TOKEN: login.authToken,
+  };
+}
+
+export async function uploadNpmPackages(packages: string[], login: LoginInformation) {
   await parallelShell(packages, async (pkg, output) => {
     console.log(`⏳ ${pkg}`);
 
     // path.resolve() is required -- if the filename ends up looking like `js/bla.tgz` then NPM thinks it's a short form GitHub name.
     await shell(['node', require.resolve('npm'), 'publish', path.resolve(pkg)], {
-      modEnv: {
-        npm_config_registry: login.npmEndpoint,
-        NPM_TOKEN: login.authToken,
-      },
+      modEnv: npmEnv(login),
       show: 'error',
       output,
     });
@@ -36,36 +45,16 @@ export async function uploadNpmPackages(packages: string[], login: LoginInformat
     }
     return false;
   });
-
-  // Add variables to env file
-  await addToEnvFile(usageDir, 'npm_config_registry', login.npmEndpoint);
-  await addToEnvFile(usageDir, 'NPM_TOKEN', login.authToken);
 }
 
 async function writeNpmLoginToken(endpoint: string, token: string) {
   const rcFile = path.join(homeDir(), '.npmrc');
-  const lines = (await fs.pathExists(rcFile) ? await fs.readFile(rcFile, { encoding: 'utf-8' }) : '').split('\n');
-  const key = `${endpoint.replace(/^https:/, '')}:_authToken=`;
+  const lines = await loadLines(rcFile);
 
-  updateNpmSetting(lines, key, token);
-  updateNpmSetting(lines, 'always-auth', 'true'); // Necessary to make NPM 6 work
+  const key = `${endpoint.replace(/^https:/, '')}:_authToken`;
+  updateIniKey(lines, key, token);
 
-  await fs.writeFile(rcFile, lines.join('\n'), { encoding: 'utf-8' });
-}
-
-function updateNpmSetting(lines: string[], key: string, value: string) {
-  const prefix = `${key}=`;
-  let found = false;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith(prefix)) {
-      lines[i] = prefix + value;
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
-    lines.push(prefix + value);
-  }
+  await writeLines(rcFile, lines);
 }
 
 // Environment variable, .npmrc in same directory as package.json or in home dir

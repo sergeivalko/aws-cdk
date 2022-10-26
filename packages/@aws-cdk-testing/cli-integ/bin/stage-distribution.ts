@@ -5,11 +5,11 @@ import * as glob from 'glob';
 import * as yargs from 'yargs';
 import { shell } from '../lib';
 import { TestRepository, LoginInformation } from '../lib/staging/codeartifact';
-import { uploadJavaPackages } from '../lib/staging/maven';
-import { uploadNpmPackages } from '../lib/staging/npm';
-import { uploadDotnetPackages } from '../lib/staging/nuget';
-import { uploadPythonPackages } from '../lib/staging/pypi';
-import { prepareUsageDir, loadCurrentCodeArtifactUsage, addToEnvFile, DEFAULT_USAGE_DIR } from '../lib/staging/usage-dir';
+import { uploadJavaPackages, mavenLogin } from '../lib/staging/maven';
+import { uploadNpmPackages, npmLogin } from '../lib/staging/npm';
+import { uploadDotnetPackages, nugetLogin } from '../lib/staging/nuget';
+import { uploadPythonPackages, pypiLogin } from '../lib/staging/pypi';
+import { UsageDir } from '../lib/staging/usage-dir';
 
 async function main() {
   await yargs
@@ -49,11 +49,32 @@ async function main() {
 
       await validateDirectory(args);
       const repo = await (args.name ? TestRepository.newWithName(args.name) : TestRepository.newRandom());
-      const { usageDir } = await publish(await repo.loginInformation(), args);
+      const login = await repo.loginInformation();
+      const usageDir = UsageDir.default();
+
+      await doLogin(login, usageDir, args);
+      await publish(login, usageDir, args);
 
       header('Done');
-      console.log('To activate these settings:');
-      console.log(`    source ${usageDir}/activate.bash`);
+      usageDir.advertise();
+    })
+    .command('login', 'Login to a given repository', cmd => cmd
+      .option('name', {
+        alias: 'n',
+        description: 'Name of the repository to log in to',
+        type: 'string',
+        requiresArg: true,
+        demandOption: true,
+      }), async (args) => {
+
+      const repo = TestRepository.existing(args.name);
+
+      const login = await repo.loginInformation();
+      const usageDir = UsageDir.default();
+
+      await doLogin(login, usageDir, args);
+
+      usageDir.advertise();
     })
     .command('run <DIRECTORY> <COMMAND..>', 'Publish and run a command', cmd => cmd
       .positional('DIRECTORY', {
@@ -78,14 +99,20 @@ async function main() {
 
       await validateDirectory(args);
       const repo = await TestRepository.newRandom();
-      const { usageDir } = await publish(await repo.loginInformation(), args);
+      const login = await repo.loginInformation();
+      const usageDir = UsageDir.default();
+
+      await doLogin(login, usageDir, args);
+      await publish(login, usageDir, args);
 
       try {
-        await loadCurrentCodeArtifactUsage(usageDir);
+        await usageDir.activateInCurrentProcess();
+
         await shell(args.COMMAND ?? [], {
           shell: true,
           show: 'always',
         });
+
       } finally {
         if (args.cleanup) {
           await repo.delete();
@@ -100,14 +127,15 @@ async function main() {
         requiresArg: true,
       }), async (args) => {
 
+      const usageDir = UsageDir.default();
+
       let repositoryName = args.name;
       if (!repositoryName) {
-        await loadCurrentCodeArtifactUsage(DEFAULT_USAGE_DIR);
-        repositoryName = process.env.CODEARTIFACT_REPO;
+        repositoryName = (await usageDir.currentEnv()).CODEARTIFACT_REPO;
       }
 
       if (!repositoryName) {
-        console.log(`No --name given and no $CODEARTIFACT_REPO found in ${DEFAULT_USAGE_DIR}, nothing cleaned up`);
+        console.log(`No --name given and no $CODEARTIFACT_REPO found in ${usageDir.directory}, nothing cleaned up`);
         return;
       }
 
@@ -132,7 +160,34 @@ async function validateDirectory(args: {
   }
 }
 
-async function publish(login: LoginInformation, args: {
+async function doLogin(login: LoginInformation, usageDir: UsageDir, args: {
+  npm?: boolean;
+  python?: boolean;
+  java?: boolean;
+  dotnet?: boolean;
+}) {
+  const oldEnv = await usageDir.currentEnv();
+
+  await usageDir.clean();
+  await usageDir.addToEnv({
+    CODEARTIFACT_REPO: login.repositoryName,
+  });
+
+  if (oldEnv.BUILD_VERSION) {
+    await usageDir.addToEnv({
+      BUILD_VERSION: oldEnv.BUILD_VERSION,
+    });
+  }
+
+  const doRepo = whichRepos(args);
+
+  await doRepo.npm(() => npmLogin(login, usageDir));
+  await doRepo.python(() => pypiLogin(login, usageDir));
+  await doRepo.java(() => mavenLogin(login, usageDir));
+  await doRepo.dotnet(() => nugetLogin(login, usageDir));
+}
+
+async function publish(login: LoginInformation, usageDir: UsageDir, args: {
   DIRECTORY: string,
   npm?: boolean;
   python?: boolean;
@@ -141,35 +196,51 @@ async function publish(login: LoginInformation, args: {
 }) {
   const directory = `${args.DIRECTORY}`;
 
-  const all = args.npm === undefined && args.python === undefined && args.java === undefined && args.dotnet === undefined;
+  const doRepo = whichRepos(args);
 
   const buildJson = await fs.readJson(path.join(directory, 'build.json'));
+  await usageDir.addToEnv({
+    BUILD_VERSION: buildJson.BUILD_VERSION,
+  });
 
-  const usageDir = await prepareUsageDir();
-  await addToEnvFile(usageDir, 'BUILD_VERSION', buildJson.version);
-  await addToEnvFile(usageDir, 'CODEARTIFACT_REPO', login.repositoryName);
-
-  if (all || args.npm) {
+  await doRepo.npm(async () => {
     header('NPM');
-    await uploadNpmPackages(glob.sync(path.join(directory, 'js', '*.tgz')), login, usageDir);
-  }
+    await uploadNpmPackages(glob.sync(path.join(directory, 'js', '*.tgz')), login);
+  });
 
-  if (all || args.python) {
+  await doRepo.python(async () => {
     header('Python');
-    await uploadPythonPackages(glob.sync(path.join(directory, 'python', '*')), login, usageDir);
-  }
+    await uploadPythonPackages(glob.sync(path.join(directory, 'python', '*')), login);
+  });
 
-  if (all || args.java) {
+  await doRepo.java(async () => {
     header('Java');
     await uploadJavaPackages(glob.sync(path.join(directory, 'java', '**', '*.pom')), login, usageDir);
-  }
+  });
 
-  if (all || args.dotnet) {
+  await doRepo.dotnet(async () => {
     header('.NET');
-    await uploadDotnetPackages(glob.sync(path.join(directory, 'dotnet', '**', '*.nupkg')), login, usageDir);
-  }
+    await uploadDotnetPackages(glob.sync(path.join(directory, 'dotnet', '**', '*.nupkg')), usageDir);
+  });
+}
 
-  return { usageDir };
+function whichRepos(args: {
+  npm?: boolean;
+  python?: boolean;
+  java?: boolean;
+  dotnet?: boolean;
+}) {
+  const all = args.npm === undefined && args.python === undefined && args.java === undefined && args.dotnet === undefined;
+
+  const invoke = (block: () => Promise<void>) => block();
+  const skip = () => { };
+
+  return {
+    npm: args.npm || all ? invoke : skip,
+    python: args.python || all ? invoke : skip,
+    java: args.java || all ? invoke : skip,
+    dotnet: args.dotnet || all ? invoke : skip,
+  };
 }
 
 function header(caption: string) {
