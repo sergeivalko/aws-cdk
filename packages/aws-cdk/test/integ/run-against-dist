@@ -12,4 +12,4 @@ rm -rf $INTEG_TOOLS && mkdir $INTEG_TOOLS
 npm install --prefix $INTEG_TOOLS --no-save ./js/aws-cdk-testing-cli-integ-*.tgz
 mv $($INTEG_TOOLS/node_modules/.bin/test-root)/* $INTEG_TOOLS
 
-CONCURRENCY=1 exec ${INTEG_TOOLS}/bin/stage-distribution run . "$@"
+CONCURRENCY=5 exec ${INTEG_TOOLS}/bin/stage-distribution run . "$@"

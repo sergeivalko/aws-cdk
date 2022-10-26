@@ -6,13 +6,16 @@ import { LoginInformation } from './codeartifact';
 import { parallelShell } from './parallel-shell';
 import { UsageDir } from './usage-dir';
 
+// Do not try to JIT the Maven binary
+const NO_JIT = '-XX:+TieredCompilation -XX:TieredStopAtLevel=1';
+
 export async function mavenLogin(login: LoginInformation, usageDir: UsageDir) {
   await writeMavenSettingsFile(settingsFile(usageDir), login);
 
   // Write env var
   // Twiddle JVM settings a bit to make Maven survive running on a CodeBuild box.
   await usageDir.addToEnv({
-    MAVEN_OPTS: `-Duser.home=${usageDir} -XX:+TieredCompilation -XX:TieredStopAtLevel=1 ${process.env.MAVEN_OPTS ?? ''}`.trim(),
+    MAVEN_OPTS: `-Duser.home=${usageDir.directory} ${NO_JIT} ${process.env.MAVEN_OPTS ?? ''}`.trim(),
   });
 }
 
@@ -36,6 +39,10 @@ export async function uploadJavaPackages(packages: string[], login: LoginInforma
       `-Dsources=${pkg.replace(/.pom$/, '-sources.jar')}`,
       `-Djavadoc=${pkg.replace(/.pom$/, '-javadoc.jar')}`], {
       output,
+      modEnv: {
+        // Do not try to JIT the Maven binary
+        MAVEN_OPTS: `${NO_JIT} ${process.env.MAVEN_OPTS ?? ''}`.trim(),
+      },
     });
 
     console.log(`✅ ${pkg}`);

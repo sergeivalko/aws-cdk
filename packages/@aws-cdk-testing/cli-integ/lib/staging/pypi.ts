@@ -13,7 +13,7 @@ export async function pypiLogin(login: LoginInformation, usageDir: UsageDir) {
     `index-url = https://aws:${login.authToken}@${login.pypiEndpoint.replace(/^https:\/\//, '')}simple/`,
   ].join('\n'));
   await usageDir.addToEnv({
-    PIP_CONFIG_FILE: `${usageDir}/pip.conf`,
+    PIP_CONFIG_FILE: `${usageDir.directory}/pip.conf`,
   });
 }
 

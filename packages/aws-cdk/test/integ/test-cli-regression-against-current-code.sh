@@ -4,7 +4,8 @@ set -eu
 # and should be called from there directly.
 
 # Contract: '@aws-cdk-testing/cli-integ' package is installed in ${INTEG_TOOLS}
-previous=$(${INTEG_TOOLS}/bin/query-github last-release --prior-to $VERSION)
+previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --prior-to $VERSION)
+echo "Running tests from: $previous"
 
 # Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
 testball=$(npm pack @aws-cdk-testing/cli-integ@$previous) || {

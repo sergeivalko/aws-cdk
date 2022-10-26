@@ -21,6 +21,7 @@ tsconfig.json
 !test/integ/cli/jest.config.js
 !test/integ/uberpackage/jest.config.js
 !resources/
+!resources/**/*
 
 .DS_Store
 

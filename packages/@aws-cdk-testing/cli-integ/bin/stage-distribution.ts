@@ -200,7 +200,7 @@ async function publish(login: LoginInformation, usageDir: UsageDir, args: {
 
   const buildJson = await fs.readJson(path.join(directory, 'build.json'));
   await usageDir.addToEnv({
-    BUILD_VERSION: buildJson.BUILD_VERSION,
+    BUILD_VERSION: buildJson.version,
   });
 
   await doRepo.npm(async () => {
