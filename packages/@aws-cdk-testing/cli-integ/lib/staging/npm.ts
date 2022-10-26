@@ -47,19 +47,25 @@ async function writeNpmLoginToken(endpoint: string, token: string) {
   const lines = (await fs.pathExists(rcFile) ? await fs.readFile(rcFile, { encoding: 'utf-8' }) : '').split('\n');
   const key = `${endpoint.replace(/^https:/, '')}:_authToken=`;
 
+  updateNpmSetting(lines, key, token);
+  updateNpmSetting(lines, 'always-auth', 'true'); // Necessary to make NPM 6 work
+
+  await fs.writeFile(rcFile, lines.join('\n'), { encoding: 'utf-8' });
+}
+
+function updateNpmSetting(lines: string[], key: string, value: string) {
+  const prefix = `${key}=`;
   let found = false;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith(key)) {
-      lines[i] = key + token;
+    if (lines[i].startsWith(prefix)) {
+      lines[i] = prefix + value;
       found = true;
       break;
     }
   }
   if (!found) {
-    lines.push(key + token);
+    lines.push(prefix + value);
   }
-
-  await fs.writeFile(rcFile, lines.join('\n'), { encoding: 'utf-8' });
 }
 
 // Environment variable, .npmrc in same directory as package.json or in home dir

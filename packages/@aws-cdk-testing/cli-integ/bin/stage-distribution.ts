@@ -42,7 +42,7 @@ async function main() {
       })
       .option('name', {
         alias: 'n',
-        description: 'Name of the repository to cleanup (default: generate unique name)',
+        description: 'Name of the repository to create (default: generate unique name)',
         type: 'string',
         requiresArg: true,
       }), async (args) => {
