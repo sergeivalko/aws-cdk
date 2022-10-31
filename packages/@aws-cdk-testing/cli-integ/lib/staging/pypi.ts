@@ -41,6 +41,10 @@ export async function uploadPythonPackages(packages: string[], login: LoginInfor
       console.log(`❌ ${pkg}: already exists. Skipped.`);
       return 'skip';
     }
+    if (output.includes('429 Too Many Requests ')) {
+      console.log(`♻️ ${pkg}: 429 Too Many Requests. Retrying.`);
+      return 'retry';
+    }
     return 'fail';
   });
 }
