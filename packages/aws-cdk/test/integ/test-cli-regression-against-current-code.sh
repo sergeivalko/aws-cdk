@@ -5,13 +5,15 @@ set -eu
 
 # Contract: '@aws-cdk-testing/cli-integ' package is installed in ${INTEG_TOOLS}
 previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --prior-to $VERSION)
-echo "Running tests from: $previous"
+echo "Previous version is: $previous"
 
 # Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
-testball=$(npm view @aws-cdk-testing/cli-integ@$previous) || {
+if ! npm view @aws-cdk-testing/cli-integ@$previous --loglevel=silent; then
     echo "During migration, @aws-cdk-testing/cli-integ@$previous does not exist yet." >&2
     exit 0
-}
+fi
+
+echo "Installing test package: @aws-cdk-testing/cli-integ@$previous"
 
 # The package MUST be 'npm install'ed from the package repository (`npm install --production`
 # will not work because that will resolve devDependencies even though it will not install them),
