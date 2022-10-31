@@ -39,8 +39,8 @@ export async function uploadPythonPackages(packages: string[], login: LoginInfor
   }, (pkg, output) => {
     if (output.toString().includes('This package is configured to block new versions') || output.toString().includes('409 Conflict')) {
       console.log(`❌ ${pkg}: already exists. Skipped.`);
-      return true;
+      return 'skip';
     }
-    return false;
+    return 'fail';
   });
 }

@@ -54,11 +54,12 @@ export function homeDir() {
 }
 
 export async function loadLines(filename: string): Promise<string[]> {
-  return await fs.pathExists(filename) ? (await fs.readFile(filename, { encoding: 'utf-8' })).split('\n') : [];
+  return await fs.pathExists(filename) ? (await fs.readFile(filename, { encoding: 'utf-8' })).trim().split('\n') : [];
 }
 
 export async function writeLines(filename: string, lines: string[]) {
-  await fs.writeFile(filename, lines.join('\n'), { encoding: 'utf-8' });
+  // Must end in a newline or our bash script won't read it properly
+  await fs.writeFile(filename, lines.join('\n') + '\n', { encoding: 'utf-8' });
 }
 
 /**

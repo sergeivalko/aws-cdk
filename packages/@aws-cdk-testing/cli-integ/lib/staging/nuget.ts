@@ -33,9 +33,13 @@ export async function uploadDotnetPackages(packages: string[], usageDir: UsageDi
   (pkg, output) => {
     if (output.toString().includes('Conflict')) {
       console.log(`❌ ${pkg}: already exists. Skipped.`);
-      return true;
+      return 'skip';
     }
-    return false;
+    if (output.includes('System.Threading.AbandonedMutexException')) {
+      console.log(`♻️ ${pkg}: AbandonedMutexException. Probably a sign of throttling, retrying.`);
+      return 'retry';
+    }
+    return 'fail';
   });
 }
 

@@ -37,13 +37,13 @@ export async function uploadNpmPackages(packages: string[], login: LoginInformat
   }, (pkg, output) => {
     if (output.toString().includes('code EPUBLISHCONFLICT')) {
       console.log(`❌ ${pkg}: already exists. Skipped.`);
-      return true;
+      return 'skip';
     }
     if (output.toString().includes('code EPRIVATE')) {
       console.log(`❌ ${pkg}: is private. Skipped.`);
-      return true;
+      return 'skip';
     }
-    return false;
+    return 'fail';
   });
 }
 

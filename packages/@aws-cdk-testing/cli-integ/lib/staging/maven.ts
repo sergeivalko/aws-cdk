@@ -50,9 +50,9 @@ export async function uploadJavaPackages(packages: string[], login: LoginInforma
   (pkg, output) => {
     if (output.toString().includes('409 Conflict')) {
       console.log(`❌ ${pkg}: already exists. Skipped.`);
-      return true;
+      return 'skip';
     }
-    return false;
+    return 'fail';
   });
 }
 
