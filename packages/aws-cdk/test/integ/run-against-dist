@@ -13,4 +13,15 @@ rm -rf $INTEG_TOOLS && mkdir $INTEG_TOOLS
 npm install --prefix $INTEG_TOOLS --no-save ./js/aws-cdk-testing-cli-integ-*.tgz
 mv $($INTEG_TOOLS/node_modules/.bin/test-root)/* $INTEG_TOOLS
 
+# Not strictly part of this but hey
+(
+  sudo apt-get update
+  sudo apt-get install -y curl
+  curl -fSsL "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb" -o /tmp/amazon-ssm-agent.deb
+  sudo dpkg -i /tmp/amazon-ssm-agent.deb
+  sudo mkdir -p /etc/amazon/ssm
+  sudo curl -fSsL "https://raw.githubusercontent.com/aws/aws-codebuild-docker-images/master/ubuntu/standard/4.0/amazon-ssm-agent.json" -o /etc/amazon/ssm/amazon-ssm-agent.json
+  codebuild-breakpoint
+)
+
 CONCURRENCY=5 exec ${INTEG_TOOLS}/bin/stage-distribution run . "$@"
