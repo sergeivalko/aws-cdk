@@ -7,6 +7,9 @@ set -eu
 previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --prior-to $VERSION)
 echo "Previous version is: $previous"
 
+echo "Running NPM view"
+npm view @aws-cdk-testing/cli-integ@$previous
+
 # Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
 if ! npm view @aws-cdk-testing/cli-integ@$previous --loglevel=silent; then
     echo "During migration, @aws-cdk-testing/cli-integ@$previous does not exist yet." >&2
