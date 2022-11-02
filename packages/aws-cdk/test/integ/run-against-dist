@@ -21,6 +21,7 @@ mv $($INTEG_TOOLS/node_modules/.bin/test-root)/* $INTEG_TOOLS
   sudo dpkg -i /tmp/amazon-ssm-agent.deb
   sudo mkdir -p /etc/amazon/ssm
   sudo curl -fSsL "https://raw.githubusercontent.com/aws/aws-codebuild-docker-images/master/ubuntu/standard/4.0/amazon-ssm-agent.json" -o /etc/amazon/ssm/amazon-ssm-agent.json
+  sleep 10
   codebuild-breakpoint
 )
 
