@@ -60,7 +60,7 @@ export class UsageDir {
   public async currentEnv(): Promise<Record<string, string>> {
     const lines = await loadLines(this.envFile);
 
-    const splitter = /^([a-zA-Z0-9_-]+)\s*=\s*(.*)$/g;
+    const splitter = /^([a-zA-Z0-9_-]+)\s*=\s*(.*)$/;
 
     const ret: Record<string, string> = {};
     for (const line of lines) {
