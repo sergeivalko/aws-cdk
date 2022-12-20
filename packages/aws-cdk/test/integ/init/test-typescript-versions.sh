@@ -3,6 +3,9 @@
 # setup
 #------------------------------------------------------------------
 set -eu
+
+# This is a backwards compatibility script. All logic has moved to '@aws-cdk-testing/cli-integ',
+# and in fact has been integrated into the regular TypeScript tests.
 scriptdir=$(cd $(dirname $0) && pwd)
 integdir=$(dirname $scriptdir)
 source ${scriptdir}/common.bash
