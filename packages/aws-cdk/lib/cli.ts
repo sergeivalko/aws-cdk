@@ -336,7 +336,9 @@ async function initCommandLine() {
     sdkProvider,
     synthesizer: async (aws, config) => {
       // Invoke 'execProgram', and copy the lock for the directory in the global
-      // variable here. It will be released when the CLI exits.
+      // variable here. It will be released when the CLI exits. Locks are not re-entrant
+      // so release it if we have to synthesize more than once (because of context lookups).
+      await outDirLock?.release();
       const { assembly, lock } = await execProgram(aws, config);
       outDirLock = lock;
       return assembly;
