@@ -39,9 +39,12 @@ typescriptVersionsSync().forEach(tsVersion => {
     await shell.shell(['npm', 'install', '--save-dev', `typescript@${tsVersion}`]);
     await shell.shell(['npm', 'install']); // Older versions of npm require this to be a separate step from the one above
     await shell.shell(['npx', 'tsc', '--version']);
-
     await shell.shell(['npm', 'prune']);
     await shell.shell(['npm', 'ls']); // this will fail if we have unmet peer dependencies
+
+    // We just removed the 'jest' dependency so remove the tests as well because they won't compile
+    await shell.shell(['rm', '-rf', 'test/']);
+
     await shell.shell(['npm', 'run', 'build']);
     await shell.shell(['cdk', 'synth']);
   })));
