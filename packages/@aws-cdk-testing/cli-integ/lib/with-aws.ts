@@ -14,7 +14,14 @@ export function withAws<A extends TestContext>(block: (context: A & AwsContext) 
     const aws = await AwsClients.forRegion(region, context.output);
     await sanityCheck(aws);
 
-    return block({ ...context, aws });
+    try {
+      // eslint-disable-next-line no-console
+      console.log('Starting test', context.randomString, 'in region', aws.region);
+      return await block({ ...context, aws });
+    } finally {
+      // eslint-disable-next-line no-console
+      console.log('Ending test', context.randomString, 'in region', aws.region);
+    }
   });
 }
 
