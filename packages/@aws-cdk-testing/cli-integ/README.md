@@ -15,7 +15,6 @@
 
 <!--END STABILITY BANNER-->
 
-
 This package contains CDK CLI integration test suites, as well as helper tools necessary to run those suites against various different distributions of the CDK (in the source repository, against a build directory, or against published releases).
 
 > The tools and tests themselves should arguably be in different packages, but I want to prevent package proliferation. For now we'll keep them together.
@@ -96,6 +95,8 @@ This is slightly complicated by two facts:
 The testing matrix looks like this:
 
 ```text
+                 OLD TESTS                             NEW TESTS
+
                     CLI                                   CLI
                 Old    New                            Old    New
             ┌────────┬────────┐                   ┌────────┬────────┐
@@ -107,8 +108,6 @@ The testing matrix looks like this:
         New │ (N/A)  │  regr  │               New │ (N/A)  │  rls   │
             │        │        │                   │        │ integ  │
             └────────┴────────┘                   └────────┴────────┘
-
-                 OLD TESTS                             NEW TESTS
 ```
 
 We are covering everything except "new tests, new CLI, old framework", which is not clear that it even makes sense to test because some new features may rely on framework support which will not be in the old version yet.
@@ -121,10 +120,10 @@ For this case we have a patching mechanism, so that in a NEW release of the tool
 
 To run the tests in a regressory fashion, do the following:
 
-* Take the current version `V1`.
+* Download the current `@aws-cdk-testing/cli-integ` artifact at `V1`.
 * Determine the previous version `V0` (use `query-github` for this).
-* Install the tests at `V0`.
-* Apply the `V0` patch set (found in the artifact of `V1`).
+* Download the previous `@aws-cdk-testing/cli-integ` artifact at `V0`.
+* From the `V1` artifact, apply the `V0` patch set.
 * Run the `V0` tests with the `--framework-version` option:
 
 ```shell
