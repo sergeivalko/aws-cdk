@@ -25,8 +25,8 @@ export function withAws<A extends TestContext>(block: (context: A & AwsContext) 
   });
 }
 
-let _regionPool: undefined | ResourcePool<string>;
-export function regionPool(): ResourcePool<string> {
+let _regionPool: undefined | ResourcePool;
+export function regionPool(): ResourcePool {
   if (_regionPool !== undefined) {
     return _regionPool;
   }
@@ -38,7 +38,7 @@ export function regionPool(): ResourcePool<string> {
   // eslint-disable-next-line no-console
   console.log(`Using regions: ${REGIONS}\n`);
 
-  _regionPool = new ResourcePool(REGIONS);
+  _regionPool = ResourcePool.withResources('aws_regions', REGIONS);
   return _regionPool;
 }
 

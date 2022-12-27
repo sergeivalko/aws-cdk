@@ -1,3 +1,5 @@
+import { ILock, XpMutex, XpMutexPool } from './xpmutex';
+
 /**
  * A class that holds a pool of resources and gives them out and returns them on-demand
  *
@@ -8,15 +10,29 @@
  * If there are multiple consumers waiting for a resource, consumers are serviced
  * in FIFO order for most fairness.
  */
-export class ResourcePool<A> {
-  private readonly resources: A[];
-  private readonly waiters: Array<(x: A) => void> = [];
+export class ResourcePool {
+  public static withResources(name: string, resources: string[]) {
+    const pool = XpMutexPool.fromName(name);
+    return new ResourcePool(pool, resources);
+  }
 
-  constructor(resources: A[]) {
+  private readonly resources: ReadonlyArray<string>;
+  private readonly mutexes: Record<string, XpMutex> = {};
+  private readonly locks: Record<string, ILock | undefined> = {};
+
+  private constructor(private readonly pool: XpMutexPool, resources: string[]) {
     if (resources.length === 0) {
       throw new Error('Must have at least one resource in the pool');
     }
-    this.resources = [...resources];
+
+    // Shuffle to reduce contention
+    resources = [...resources];
+    fisherYatesShuffle(resources);
+    this.resources = resources;
+
+    for (const res of resources) {
+      this.mutexes[res] = this.pool.mutex(res);
+    }
   }
 
   /**
@@ -24,30 +40,43 @@ export class ResourcePool<A> {
    *
    * If no such value is currently available, wait until it is.
    */
-  public take(): Promise<ILease<A>> {
-    const next = this.resources.shift();
-    if (next !== undefined) {
-      return Promise.resolve(this.makeLease(next));
-    } else {
-      return new Promise(ok => {
-        this.waiters.push((resource) => ok(this.makeLease(resource)));
-      });
+  public async take(): Promise<ILease<string>> {
+    while (true) {
+      for (const res of this.unlockedResources()) {
+        const lease = await this.tryObtainLease(res);
+        if (lease) { return lease; }
+        continue;
+      }
+
+      // None available, wait until one gets unlocked then try again
+      // (with a max timeout in case we miss a signal)
+      await this.pool.awaitUnlock(10000);
     }
   }
 
   /**
    * Execute a block using a single resource from the pool
    */
-  public async using<B>(block: (x: A) => B | Promise<B>): Promise<B> {
+  public async using<B>(block: (x: string) => B | Promise<B>): Promise<B> {
     const lease = await this.take();
     try {
       return await block(lease.value);
     } finally {
-      lease.dispose();
+      await lease.dispose();
     }
   }
 
-  private makeLease(value: A): ILease<A> {
+  private async tryObtainLease(value: string) {
+    const lock = await this.mutexes[value].tryAcquire();
+    if (!lock) {
+      return undefined;
+    }
+
+    this.locks[value] = lock;
+    return this.makeLease(value);
+  }
+
+  private makeLease(value: string): ILease<string> {
     let disposed = false;
     return {
       value,
@@ -56,7 +85,7 @@ export class ResourcePool<A> {
           throw new Error('Calling dispose() on an already-disposed lease.');
         }
         disposed = true;
-        this.returnValue(value);
+        return this.returnValue(value);
       },
     };
   }
@@ -67,15 +96,17 @@ export class ResourcePool<A> {
    * - If someone's waiting for it, give it to them
    * - Otherwise put it back into the pool
    */
-  private returnValue(value: A) {
-    const nextWaiter = this.waiters.shift();
-    if (nextWaiter !== undefined) {
-      // Execute in the next tick, otherwise the call stack is going to get very
-      // confusing.
-      setImmediate(() => nextWaiter(value));
-    } else {
-      this.resources.unshift(value);
-    }
+  private async returnValue(value: string) {
+    const lock = this.locks[value];
+    delete this.locks[value];
+    await lock?.release();
+  }
+
+  /**
+   * Return all resources that we definitely don't own the locks for
+   */
+  private unlockedResources(): string[] {
+    return this.resources.filter(res => !this.locks[res]);
   }
 }
 
@@ -91,5 +122,17 @@ export interface ILease<A> {
   /**
    * Return the leased value to the pool
    */
-  dispose(): void;
+  dispose(): Promise<void>;
+}
+
+/**
+ * Shuffle an array in-place
+ */
+function fisherYatesShuffle<A>(xs: A[]) {
+  for (let i = xs.length - 1; i >= 1; i--) {
+    const j = Math.floor(Math.random() * i);
+    const h = xs[j];
+    xs[j] = xs[i];
+    xs[i] = h;
+  }
 }
