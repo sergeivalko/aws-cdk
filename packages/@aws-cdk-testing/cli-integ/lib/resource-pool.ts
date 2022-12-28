@@ -42,15 +42,21 @@ export class ResourcePool<A extends string=string> {
    */
   public async take(): Promise<ILease<A>> {
     while (true) {
+      // Start a wait on the unlock now -- if the unlock signal comes after
+      // we try to acquire but before we start the wait, we might miss it.
+      const wait = this.pool.awaitUnlock();
+
       for (const res of this.unlockedResources()) {
         const lease = await this.tryObtainLease(res);
-        if (lease) { return lease; }
-        continue;
+        if (lease) {
+          // Ignore the wait (count as handled)
+          wait.then(() => {}, () => {});
+          return lease;
+        }
       }
 
       // None available, wait until one gets unlocked then try again
-      // (with a max timeout in case we miss a signal)
-      await this.pool.awaitUnlock(10000);
+      await wait;
     }
   }
 

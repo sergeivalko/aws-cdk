@@ -47,9 +47,14 @@ export class XpMutexPool {
   private startWatch() {
     this.watcher = watch(this.directory);
     (this.watcher as any).unref(); // @types doesn't know about this but it exists
-    this.watcher.on('change', (eventType) => {
-      // Actually 'delete'
-      if (eventType === 'rename') {
+    this.watcher.on('change', async (eventType, fname) => {
+      // Only trigger on 'deletes'.
+      // After receiving the event, we check if the file exists.
+      // - If no: the file was deleted! Huzzah, this counts as a wakeup.
+      // - If yes: either the file was just created (in which case we don't need to wakeup)
+      //   or the event was due to a delete but someone raced us to it and claimed the
+      //   file already (in which case we also don't need to wake up).
+      if (eventType === 'rename' && !await fileExists(path.join(this.directory, fname.toString()))) {
         this.notifyWaiters();
       }
     });
@@ -123,15 +128,21 @@ export class XpMutex {
    */
   public async acquire(): Promise<ILock> {
     while (true) {
-      const lock = await this.acquire();
-      if (lock) { return lock; }
-
-      // If we didn't get the lock, wait until it gets released (by waiting
-      // until the file gets deleted) and retry.
+      // Start the wait here, so we don't miss the signal if it comes after
+      // we try but before we sleep.
       //
       // We also periodically retry anyway since we may have missed the delete
       // signal due to unfortunate timing.
-      await this.pool.awaitUnlock(5000);
+      const wait = this.pool.awaitUnlock(5000);
+
+      const lock = await this.acquire();
+      if (lock) {
+        // Ignore the wait (count as handled)
+        wait.then(() => {}, () => {});
+        return lock;
+      }
+
+      await wait;
       await randomSleep(100);
     }
   }
@@ -153,6 +164,7 @@ export class XpMutex {
     const fd = await fs.open(this.fileName, mode); // Fails if the file already exists
     await fd.write(`${process.pid}.`); // Period guards against partial reads
     await fd.close();
+
     return {
       release: async () => {
         await fs.unlink(this.fileName);
@@ -164,6 +176,16 @@ export class XpMutex {
 
 export interface ILock {
   release(): Promise<void>;
+}
+
+async function fileExists(fileName: string) {
+  try {
+    await fs.stat(fileName);
+    return true;
+  } catch (e) {
+    if (e.code === 'ENOENT') { return false; }
+    throw e;
+  }
 }
 
 function processExists(pid: number) {
