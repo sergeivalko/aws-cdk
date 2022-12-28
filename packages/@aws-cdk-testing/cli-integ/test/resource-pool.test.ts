@@ -1,7 +1,9 @@
 import { ResourcePool } from '../lib/resource-pool';
 
+const POOL_NAME = 'resource-pool.test';
+
 test('take and dispose', async () => {
-  const pool = new ResourcePool(['a']);
+  const pool = ResourcePool.withResources(POOL_NAME, ['a']);
 
   const take1 = pool.take();
   const take2 = pool.take();
@@ -17,21 +19,21 @@ test('take and dispose', async () => {
   await waitTick();
   expect(released).toEqual(false);
 
-  lease1.dispose();
+  await lease1.dispose();
   await waitTick(); // This works because setImmediate is scheduled in LIFO order
   expect(released).toEqual(true);
 });
 
 test('double dispose throws', async () => {
-  const pool = new ResourcePool(['a']);
+  const pool = ResourcePool.withResources(POOL_NAME, ['a']);
   const lease = await pool.take();
 
-  lease.dispose();
+  await lease.dispose();
   expect(() => lease.dispose()).toThrow();
 });
 
 test('more consumers than values', async () => {
-  const pool = new ResourcePool(['a', 'b']);
+  const pool = ResourcePool.withResources(POOL_NAME, ['a', 'b']);
 
   const values = await Promise.all([
     pool.using(x => x),
