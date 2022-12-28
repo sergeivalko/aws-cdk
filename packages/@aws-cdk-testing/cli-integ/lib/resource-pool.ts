@@ -10,7 +10,7 @@ import { ILock, XpMutex, XpMutexPool } from './xpmutex';
  * If there are multiple consumers waiting for a resource, consumers are serviced
  * in FIFO order for most fairness.
  */
-export class ResourcePool<A extends string> {
+export class ResourcePool<A extends string=string> {
   public static withResources<A extends string>(name: string, resources: A[]) {
     const pool = XpMutexPool.fromName(name);
     return new ResourcePool(pool, resources);
