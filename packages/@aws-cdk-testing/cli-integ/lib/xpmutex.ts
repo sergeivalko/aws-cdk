@@ -13,8 +13,10 @@ export class XpMutexPool {
   }
 
   private readonly queuedResolvers = new Set<() => void>();
+  private watcher: ReturnType<typeof watch> | undefined;
 
   private constructor(public readonly directory: string) {
+    this.startWatch();
   }
 
   public mutex(name: string) {
@@ -43,22 +45,27 @@ export class XpMutexPool {
   }
 
   private startWatch() {
-    const watcher = watch(this.directory);
-    watcher.on('change', (eventType) => {
+    this.watcher = watch(this.directory);
+    (this.watcher as any).unref(); // @types doesn't know about this but it exists
+    this.watcher.on('change', (eventType) => {
+      // Actually 'delete'
       if (eventType === 'rename') {
-        // Actually 'delete'
-        for (const promise of this.queuedResolvers) {
-          promise();
-        }
-        this.queuedResolvers.clear();
+        this.notifyWaiters();
       }
     });
-    watcher.on('error', async (e) => {
+    this.watcher.on('error', async (e) => {
       // eslint-disable-next-line no-console
       console.error(e);
       await randomSleep(100);
       this.startWatch();
     });
+  }
+
+  private notifyWaiters() {
+    for (const promise of this.queuedResolvers) {
+      promise();
+    }
+    this.queuedResolvers.clear();
   }
 }
 
@@ -124,7 +131,7 @@ export class XpMutex {
       //
       // We also periodically retry anyway since we may have missed the delete
       // signal due to unfortunate timing.
-      await Promise.race([this.pool.awaitUnlock(), sleep(5000)]);
+      await this.pool.awaitUnlock(5000);
       await randomSleep(100);
     }
   }
@@ -169,7 +176,7 @@ function processExists(pid: number) {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(ok => setTimeout(ok, ms));
+  return new Promise(ok => (setTimeout(ok, ms) as any).unref());
 }
 
 function randomSleep(ms: number) {

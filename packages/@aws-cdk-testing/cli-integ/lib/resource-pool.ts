@@ -10,17 +10,17 @@ import { ILock, XpMutex, XpMutexPool } from './xpmutex';
  * If there are multiple consumers waiting for a resource, consumers are serviced
  * in FIFO order for most fairness.
  */
-export class ResourcePool {
-  public static withResources(name: string, resources: string[]) {
+export class ResourcePool<A extends string> {
+  public static withResources<A extends string>(name: string, resources: A[]) {
     const pool = XpMutexPool.fromName(name);
     return new ResourcePool(pool, resources);
   }
 
-  private readonly resources: ReadonlyArray<string>;
+  private readonly resources: ReadonlyArray<A>;
   private readonly mutexes: Record<string, XpMutex> = {};
   private readonly locks: Record<string, ILock | undefined> = {};
 
-  private constructor(private readonly pool: XpMutexPool, resources: string[]) {
+  private constructor(private readonly pool: XpMutexPool, resources: A[]) {
     if (resources.length === 0) {
       throw new Error('Must have at least one resource in the pool');
     }
@@ -40,7 +40,7 @@ export class ResourcePool {
    *
    * If no such value is currently available, wait until it is.
    */
-  public async take(): Promise<ILease<string>> {
+  public async take(): Promise<ILease<A>> {
     while (true) {
       for (const res of this.unlockedResources()) {
         const lease = await this.tryObtainLease(res);
@@ -57,7 +57,7 @@ export class ResourcePool {
   /**
    * Execute a block using a single resource from the pool
    */
-  public async using<B>(block: (x: string) => B | Promise<B>): Promise<B> {
+  public async using<B>(block: (x: A) => B | Promise<B>): Promise<B> {
     const lease = await this.take();
     try {
       return await block(lease.value);
@@ -66,7 +66,7 @@ export class ResourcePool {
     }
   }
 
-  private async tryObtainLease(value: string) {
+  private async tryObtainLease(value: A) {
     const lock = await this.mutexes[value].tryAcquire();
     if (!lock) {
       return undefined;
@@ -76,7 +76,7 @@ export class ResourcePool {
     return this.makeLease(value);
   }
 
-  private makeLease(value: string): ILease<string> {
+  private makeLease(value: A): ILease<A> {
     let disposed = false;
     return {
       value,
@@ -105,7 +105,7 @@ export class ResourcePool {
   /**
    * Return all resources that we definitely don't own the locks for
    */
-  private unlockedResources(): string[] {
+  private unlockedResources(): A[] {
     return this.resources.filter(res => !this.locks[res]);
   }
 }

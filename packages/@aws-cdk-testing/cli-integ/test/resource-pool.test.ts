@@ -4,7 +4,6 @@ const POOL_NAME = 'resource-pool.test';
 
 test('take and dispose', async () => {
   const pool = ResourcePool.withResources(POOL_NAME, ['a']);
-
   const take1 = pool.take();
   const take2 = pool.take();
 
@@ -21,6 +20,9 @@ test('take and dispose', async () => {
 
   await lease1.dispose();
   await waitTick(); // This works because setImmediate is scheduled in LIFO order
+
+  const lease2 = await take2;
+  await lease2.dispose();
   expect(released).toEqual(true);
 });
 
@@ -33,17 +35,29 @@ test('double dispose throws', async () => {
 });
 
 test('more consumers than values', async () => {
-  const pool = ResourcePool.withResources(POOL_NAME, ['a', 'b']);
+  const counters = {
+    a: 0,
+    b: 0,
+  };
+  const N = 4;
 
-  const values = await Promise.all([
-    pool.using(x => x),
-    pool.using(x => x),
-    pool.using(x => x),
-  ]);
+  const keys = Object.keys(counters) as Array<keyof typeof counters> ;
+  const pool = ResourcePool.withResources(POOL_NAME, keys);
+  await Promise.all(Array.from(range(N)).map(() =>
+    pool.using(x => counters[x] += 1),
+  ));
 
-  expect(values).toEqual(['a', 'b', 'a']);
+  // Regardless of which resource(s) we used, the total count should add up to N
+  const sum = Object.values(counters).reduce((a, b) => a + b, 0);
+  expect(sum).toEqual(N);
 });
 
 function waitTick() {
   return new Promise(setImmediate);
+}
+
+function* range(n: number) {
+  for (let i = 0; i < n; i++) {
+    yield i;
+  }
 }
