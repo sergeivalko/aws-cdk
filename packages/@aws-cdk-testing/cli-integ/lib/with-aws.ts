@@ -10,19 +10,23 @@ export type AwsContext = { readonly aws: AwsClients };
  * Allocate the next region from the REGION pool and dispose it afterwards.
  */
 export function withAws<A extends TestContext>(block: (context: A & AwsContext) => Promise<void>) {
-  return (context: A) => regionPool().using(async (region) => {
-    const aws = await AwsClients.forRegion(region, context.output);
-    await sanityCheck(aws);
+  return (context: A) => {
+    // eslint-disable-next-line no-console
+    console.log(new Date(), 'Awaiting a region');
+    return regionPool().using(async (region) => {
+      const aws = await AwsClients.forRegion(region, context.output);
+      await sanityCheck(aws);
 
-    try {
-      // eslint-disable-next-line no-console
-      console.log('Starting test', context.randomString, 'in region', aws.region);
-      return await block({ ...context, aws });
-    } finally {
-      // eslint-disable-next-line no-console
-      console.log('Ending test', context.randomString, 'in region', aws.region);
-    }
-  });
+      try {
+        // eslint-disable-next-line no-console
+        console.log(new Date(), 'Starting test', context.randomString, 'in region', aws.region);
+        return await block({ ...context, aws });
+      } finally {
+        // eslint-disable-next-line no-console
+        console.log(new Date(), 'Ending test', context.randomString, 'in region', aws.region);
+      }
+    });
+  };
 }
 
 let _regionPool: undefined | ResourcePool;
