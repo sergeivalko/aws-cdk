@@ -1,0 +1,40 @@
+#!/bin/bash
+set -eu
+# Download old tests. Written in bash, just because. Needs to do contortions, see below.
+set -x
+
+scriptdir=$(cd $(dirname $0) && pwd)
+
+version="$1"
+target_directory="$2"
+
+echo "Running NPM view"
+npm view @aws-cdk-testing/cli-integ@$version
+echo "exit code $?"
+
+# Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
+if ! npm view @aws-cdk-testing/cli-integ@$version --loglevel=silent; then
+    echo "During migration, @aws-cdk-testing/cli-integ@$version does not exist yet." >&2
+    exit 0
+fi
+
+echo "Installing test package: @aws-cdk-testing/cli-integ@$version"
+
+# The old tests package MUST be 'npm install <pkg>'ed as a dependency, but MUST NOT
+# end up in a `node_modules` directory.
+#
+# - MUST be 'npm install'ed: we need transitive dependencies as well.
+# - as a dependency: if we check out the source and do an `npm install --production` in the
+#   package.json directory, NPM will still try to resolve devDependencies (even though it doesn't
+#   need to install them), and the devDeps do not exist on npmjs.
+# - MUST NOT end up in `node_modules`: Jest 27 will ignore all tests that have `node_modules` in
+#   the path, and this behavior is not configurable before Jest 28. Unfortunately, because of TypeScript
+#   typing issues, we cannot move past Jest 27.
+#
+# To achieve this, do an `npm install <pkg>` then follow up with an `mv` to move the files out.
+rm -rf $target_directory && mkdir $target_directory
+npm install --prefix $target_directory --no-save @aws-cdk-testing/cli-integ@$version
+mv $($target_directory/node_modules/.bin/test-root)/* $target_directory
+
+# Apply new patches to old tests
+${scriptdir}/apply-patches $version $target_directory
