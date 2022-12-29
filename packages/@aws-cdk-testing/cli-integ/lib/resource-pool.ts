@@ -44,7 +44,7 @@ export class ResourcePool<A extends string=string> {
     while (true) {
       // Start a wait on the unlock now -- if the unlock signal comes after
       // we try to acquire but before we start the wait, we might miss it.
-      const wait = this.pool.awaitUnlock();
+      const wait = this.pool.awaitUnlock(5000);
 
       for (const res of this.unlockedResources()) {
         const lease = await this.tryObtainLease(res);

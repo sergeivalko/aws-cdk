@@ -1,3 +1,4 @@
+import { sleep } from '../lib';
 import { ResourcePool } from '../lib/resource-pool';
 
 const POOL_NAME = 'resource-pool.test';
@@ -34,22 +35,42 @@ test('double dispose throws', async () => {
   expect(() => lease.dispose()).toThrow();
 });
 
-test('more consumers than values', async () => {
+test('somewhat balance', async () => {
   const counters = {
     a: 0,
     b: 0,
+    c: 0,
+    d: 0,
+    e: 0,
   };
-  const N = 4;
+  const N = 100;
+  let maxConcurrency = 0;
+  let concurrency = 0;
 
   const keys = Object.keys(counters) as Array<keyof typeof counters> ;
   const pool = ResourcePool.withResources(POOL_NAME, keys);
   await Promise.all(Array.from(range(N)).map(() =>
-    pool.using(x => counters[x] += 1),
+    pool.using(async (x) => {
+      counters[x] += 1;
+      concurrency += 1;
+      maxConcurrency = Math.max(maxConcurrency, concurrency);
+      try {
+        await sleep(10);
+      } finally {
+        concurrency -= 1;
+      }
+    }),
   ));
 
   // Regardless of which resource(s) we used, the total count should add up to N
   const sum = Object.values(counters).reduce((a, b) => a + b, 0);
   expect(sum).toEqual(N);
+  // There was concurrency
+  expect(maxConcurrency).toBeGreaterThan(2);
+  // All counters are used
+  for (const count of Object.values(counters)) {
+    expect(count).toBeGreaterThan(0);
+  }
 });
 
 function waitTick() {
