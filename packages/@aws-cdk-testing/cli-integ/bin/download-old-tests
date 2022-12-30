@@ -8,17 +8,7 @@ scriptdir=$(cd $(dirname $0) && pwd)
 version="$1"
 target_directory="$2"
 
-echo "Running NPM view"
-npm view @aws-cdk-testing/cli-integ@$version
-echo "exit code $?"
-
-# Obtain the right version of @aws-cdk-testing/cli-integ (must not be 'npm install'ed, so use 'npm pack')
-if ! npm view @aws-cdk-testing/cli-integ@$version --loglevel=silent; then
-    echo "During migration, @aws-cdk-testing/cli-integ@$version does not exist yet." >&2
-    exit 0
-fi
-
-echo "Installing test package: @aws-cdk-testing/cli-integ@$version"
+rm -rf $target_directory && mkdir $target_directory
 
 # The old tests package MUST be 'npm install <pkg>'ed as a dependency, but MUST NOT
 # end up in a `node_modules` directory.
@@ -32,8 +22,17 @@ echo "Installing test package: @aws-cdk-testing/cli-integ@$version"
 #   typing issues, we cannot move past Jest 27.
 #
 # To achieve this, do an `npm install <pkg>` then follow up with an `mv` to move the files out.
-rm -rf $target_directory && mkdir $target_directory
-npm install --prefix $target_directory --no-save @aws-cdk-testing/cli-integ@$version
+if !  npm install --prefix $target_directory --no-save @aws-cdk-testing/cli-integ@$version > npm.log 2>&1; then
+    cat npm.log >&2
+    # Catch a "package does not exist" error, have to do it this way because for some reason,
+    # 'npm view <pkg>' doesn't exit with an error... :s
+    if grep -q 'code ETARGET' npm.log; then
+        echo "During migration, @aws-cdk-testing/cli-integ@$version does not exist yet." >&2
+        exit 0
+    fi
+    exit 1
+fi
+
 mv $($target_directory/node_modules/.bin/test-root)/* $target_directory
 
 # Apply new patches to old tests

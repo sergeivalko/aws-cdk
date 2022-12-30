@@ -8,9 +8,6 @@ set -x
 previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --prior-to $VERSION)
 echo "Previous version is: $previous"
 
-echo "NPM version"
-npm --version
-
 export OLD_TESTS=old_tests
 $INTEG_TOOLS/bin/download-old-tests "$previous" "$OLD_TESTS"
 
