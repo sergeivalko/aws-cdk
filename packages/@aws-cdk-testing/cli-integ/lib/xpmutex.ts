@@ -91,36 +91,42 @@ export class XpMutex {
    * Try to acquire the lock (may fail)
    */
   public async tryAcquire(): Promise<ILock | undefined> {
-    // Acquire lock by being the one to create the file
-    try {
-      return await this.writePidFile('wx'); // Fails if the file already exists
-    } catch (e) {
-      if (e.code !== 'EEXIST') { throw e; }
-    }
+    while (true) {
+      // Acquire lock by being the one to create the file
+      try {
+        return await this.writePidFile('wx'); // Fails if the file already exists
+      } catch (e) {
+        if (e.code !== 'EEXIST') { throw e; }
+      }
 
-    // File already exists. Read the contents, see if it's an existent PID (if so, the lock is taken)
-    const ownerPid = await this.readPidFile();
-    if (processExists(ownerPid)) {
-      return undefined;
-    }
+      // File already exists. Read the contents, see if it's an existent PID (if so, the lock is taken)
+      const ownerPid = await this.readPidFile();
+      if (ownerPid === undefined) {
+        // File got deleted just now, maybe we can acquire it again
+        continue;
+      }
+      if (processExists(ownerPid)) {
+        return undefined;
+      }
 
-    // If not, the lock is stale and will never be released anymore. We may
-    // delete it and acquire it anyway, but we may be racing someone else trying
-    // to do the same. Solve this as follows:
-    // - Try to acquire a lock that gives us permissions to declare the existing lock stale.
-    // - Sleep a small random period to reduce contention on this operation
-    await randomSleep(10);
-    const innerMux = new XpMutex(this.pool, `${this.mutexName}.${ownerPid}`);
-    const innerLock = await innerMux.tryAcquire();
-    if (!innerLock) {
-      return undefined;
-    }
+      // If not, the lock is stale and will never be released anymore. We may
+      // delete it and acquire it anyway, but we may be racing someone else trying
+      // to do the same. Solve this as follows:
+      // - Try to acquire a lock that gives us permissions to declare the existing lock stale.
+      // - Sleep a small random period to reduce contention on this operation
+      await randomSleep(10);
+      const innerMux = new XpMutex(this.pool, `${this.mutexName}.${ownerPid}`);
+      const innerLock = await innerMux.tryAcquire();
+      if (!innerLock) {
+        return undefined;
+      }
 
-    // We may not release the 'inner lock' we used to acquire the rights to declare the other
-    // lock stale until we release the actual lock itself. If we did, other contenders might
-    // see it released while they're still in this fallback block and accidentally steal
-    // from a new legitimate owner.
-    return this.writePidFile('w', innerLock); // Force write lock file, attach inner lock as well
+      // We may not release the 'inner lock' we used to acquire the rights to declare the other
+      // lock stale until we release the actual lock itself. If we did, other contenders might
+      // see it released while they're still in this fallback block and accidentally steal
+      // from a new legitimate owner.
+      return this.writePidFile('w', innerLock); // Force write lock file, attach inner lock as well
+    }
   }
 
   /**
@@ -147,10 +153,16 @@ export class XpMutex {
     }
   }
 
-  private async readPidFile(): Promise<number> {
+  private async readPidFile(): Promise<number | undefined> {
     const deadLine = Date.now() + 1000;
     while (Date.now() < deadLine) {
-      const contents = await fs.readFile(this.fileName, { encoding: 'utf-8' });
+      let contents;
+      try {
+        contents = await fs.readFile(this.fileName, { encoding: 'utf-8' });
+      } catch (e) {
+        if (e.code === 'ENOENT') { return undefined; }
+        throw e;
+      }
 
       // Retry until we've seen the full contents
       if (contents.endsWith('.')) { return parseInt(contents.substring(0, contents.length - 1), 10); }
@@ -161,7 +173,7 @@ export class XpMutex {
   }
 
   private async writePidFile(mode: string, additionalLock?: ILock): Promise<ILock> {
-    const fd = await fs.open(this.fileName, mode); // Fails if the file already exists
+    const fd = await fs.open(this.fileName, mode); // May fail if the file already exists
     await fd.write(`${process.pid}.`); // Period guards against partial reads
     await fd.close();
 
