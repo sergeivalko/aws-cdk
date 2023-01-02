@@ -8,8 +8,5 @@ set -x
 previous=$(${INTEG_TOOLS}/bin/query-github last-release --token $GITHUB_TOKEN --prior-to $VERSION)
 echo "Previous version is: $previous"
 
-export OLD_TESTS=old_tests
-$INTEG_TOOLS/bin/download-old-tests "$previous" "$OLD_TESTS"
-
 # Old tests, new CLI, new framework
-exec $OLD_TESTS/bin/run-suite --use-version=$VERSION cli-integ-tests
+exec $INTEG_TOOLS/bin/download-and-run-old-tests "$previous" --use-version=$VERSION cli-integ-tests

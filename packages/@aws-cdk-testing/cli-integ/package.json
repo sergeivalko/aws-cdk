@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "bin": {
     "run-suite": "bin/run-suite",
-    "download-old-tests": "bin/download-old-tests",
+    "download-and-run-old-tests": "bin/download-and-run-old-tests",
     "query-github": "bin/query-github",
     "apply-patches": "bin/apply-patches",
     "test-root": "bin/test-root",

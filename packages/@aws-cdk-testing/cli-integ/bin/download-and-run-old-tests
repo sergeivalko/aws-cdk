@@ -1,12 +1,17 @@
 #!/bin/bash
 set -eu
-# Download old tests. Written in bash, just because. Needs to do contortions, see below.
+# Download old tests and run them. Written in bash, just because. Needs to do contortions, see below.
+#
+# Usage:
+#
+#   download-and-run-old-tests <version> [...args to run-suite...]
 set -x
 
 scriptdir=$(cd $(dirname $0) && pwd)
 
 version="$1"
-target_directory="$2"
+target_directory="old_tests"
+shift
 
 rm -rf $target_directory && mkdir $target_directory
 
@@ -37,3 +42,6 @@ mv $($target_directory/node_modules/.bin/test-root)/* $target_directory
 
 # Apply new patches to old tests
 ${scriptdir}/apply-patches $version $target_directory
+
+# Run the suite from the old tests
+exec $target_directory/bin/run-suite "$@"
