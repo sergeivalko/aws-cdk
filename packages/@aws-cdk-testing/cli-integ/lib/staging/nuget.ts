@@ -39,6 +39,10 @@ export async function uploadDotnetPackages(packages: string[], usageDir: UsageDi
       console.log(`♻️ ${pkg}: AbandonedMutexException. Probably a sign of throttling, retrying.`);
       return 'retry';
     }
+    if (output.includes('Too Many Requests')) {
+      console.log(`♻️ ${pkg}: Too many requests. Retrying.`);
+      return 'retry';
+    }
     return 'fail';
   });
 }
