@@ -33,6 +33,11 @@ if !  npm install --prefix $target_directory --no-save @aws-cdk-testing/cli-inte
     # 'npm view <pkg>' doesn't exit with an error... :s
     if grep -q 'code ETARGET' npm.log; then
         echo "During migration, @aws-cdk-testing/cli-integ@$version does not exist yet." >&2
+
+
+        # Do create an empty junit.xml file -- if we don't, then the "upload report" phase will fail
+        # if there are 0 files to upload.
+        echo '<testsuites id="Norun" name="No run" tests="0" failures="0" time="0"></testsuites>' > junit.xml
         exit 0
     fi
     exit 1
