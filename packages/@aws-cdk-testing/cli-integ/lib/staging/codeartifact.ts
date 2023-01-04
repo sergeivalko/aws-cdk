@@ -127,7 +127,7 @@ export class TestRepository {
    */
   public async markAllUpstreamAllow() {
     for await (const pkg of this.listPackages({ upstream: 'BLOCK' })) {
-      await this.codeArtifact.putPackageOriginConfiguration({
+      await retryThrottled(() => this.codeArtifact.putPackageOriginConfiguration({
         domain: this.domain,
         repository: this.repositoryName,
 
@@ -138,7 +138,7 @@ export class TestRepository {
           publish: 'ALLOW',
           upstream: 'ALLOW',
         },
-      }).promise();
+      }).promise());
     }
   }
 
@@ -216,11 +216,11 @@ export class TestRepository {
   }
 
   private async* listPackages(filter: Pick<AWS.CodeArtifact.ListPackagesRequest, 'upstream'|'publish'|'format'> = {}) {
-    let response = await this.codeArtifact.listPackages({
+    let response = await retryThrottled(() => this.codeArtifact.listPackages({
       domain: this.domain,
       repository: this.repositoryName,
       ...filter,
-    }).promise();
+    }).promise());
 
     while (true) {
       for (const p of response.packages ?? []) {
@@ -231,12 +231,12 @@ export class TestRepository {
         break;
       }
 
-      response = await this.codeArtifact.listPackages({
+      response = await retryThrottled(() => this.codeArtifact.listPackages({
         domain: this.domain,
         repository: this.repositoryName,
         ...filter,
         nextToken: response.nextToken,
-      }).promise();
+      }).promise());
     }
   }
 }
@@ -247,14 +247,26 @@ async function retry<A>(block: () => Promise<A>) {
     try {
       return await block();
     } catch (e) {
+      if (attempts-- === 0) { throw e; }
       // eslint-disable-next-line no-console
       console.debug(e.message);
-      if (attempts-- === 0) { throw e; }
       await sleep(500);
     }
   }
 }
 
+async function retryThrottled<A>(block: () => Promise<A>) {
+  let attempts = 10;
+  while (true) {
+    try {
+      return await block();
+    } catch (e) {
+      if (e.code !== 'ThrottlingException') { throw e; }
+      if (attempts-- === 0) { throw e; }
+      await sleep(1000);
+    }
+  }
+}
 
 export interface LoginInformation {
   readonly authToken: string;
