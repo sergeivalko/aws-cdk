@@ -4,7 +4,7 @@ import * as fs from 'fs-extra';
 import * as glob from 'glob';
 import * as yargs from 'yargs';
 import { shell } from '../lib';
-import { TestRepository, LoginInformation } from '../lib/staging/codeartifact';
+import { TestRepository } from '../lib/staging/codeartifact';
 import { uploadJavaPackages, mavenLogin } from '../lib/staging/maven';
 import { uploadNpmPackages, npmLogin } from '../lib/staging/npm';
 import { uploadDotnetPackages, nugetLogin } from '../lib/staging/nuget';
@@ -49,11 +49,10 @@ async function main() {
 
       await validateDirectory(args);
       const repo = await (args.name ? TestRepository.newWithName(args.name) : TestRepository.newRandom());
-      const login = await repo.loginInformation();
       const usageDir = UsageDir.default();
 
-      await doLogin(login, usageDir, args);
-      await publish(login, usageDir, args);
+      await doLogin(repo, usageDir, args);
+      await publish(repo, usageDir, args);
 
       header('Done');
       usageDir.advertise();
@@ -68,11 +67,9 @@ async function main() {
       }), async (args) => {
 
       const repo = TestRepository.existing(args.name);
-
-      const login = await repo.loginInformation();
       const usageDir = UsageDir.default();
 
-      await doLogin(login, usageDir, args);
+      await doLogin(repo, usageDir, args);
 
       usageDir.advertise();
     })
@@ -99,11 +96,10 @@ async function main() {
 
       await validateDirectory(args);
       const repo = await TestRepository.newRandom();
-      const login = await repo.loginInformation();
       const usageDir = UsageDir.default();
 
-      await doLogin(login, usageDir, args);
-      await publish(login, usageDir, args);
+      await doLogin(repo, usageDir, args);
+      await publish(repo, usageDir, args);
 
       try {
         await usageDir.activateInCurrentProcess();
@@ -160,12 +156,14 @@ async function validateDirectory(args: {
   }
 }
 
-async function doLogin(login: LoginInformation, usageDir: UsageDir, args: {
+async function doLogin(repo: TestRepository, usageDir: UsageDir, args: {
   npm?: boolean;
   python?: boolean;
   java?: boolean;
   dotnet?: boolean;
 }) {
+  const login = await repo.loginInformation();
+
   const oldEnv = await usageDir.currentEnv();
 
   await usageDir.clean();
@@ -187,7 +185,7 @@ async function doLogin(login: LoginInformation, usageDir: UsageDir, args: {
   await doRepo.dotnet(() => nugetLogin(login, usageDir));
 }
 
-async function publish(login: LoginInformation, usageDir: UsageDir, args: {
+async function publish(repo: TestRepository, usageDir: UsageDir, args: {
   DIRECTORY: string,
   npm?: boolean;
   python?: boolean;
@@ -195,6 +193,7 @@ async function publish(login: LoginInformation, usageDir: UsageDir, args: {
   dotnet?: boolean;
 }) {
   const directory = `${args.DIRECTORY}`;
+  const login = await repo.loginInformation();
 
   const doRepo = whichRepos(args);
 
@@ -222,6 +221,8 @@ async function publish(login: LoginInformation, usageDir: UsageDir, args: {
     header('.NET');
     await uploadDotnetPackages(glob.sync(path.join(directory, 'dotnet', '**', '*.nupkg')), usageDir);
   });
+
+  await repo.markAllUpstreamAllow();
 }
 
 function whichRepos(args: {

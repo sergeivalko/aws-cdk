@@ -64,6 +64,8 @@ export class TestRepository {
 
   private readonly codeArtifact = new AWS.CodeArtifact();
 
+  private _loginInformation: LoginInformation | undefined;
+
   private constructor(public readonly repositoryName: string) {
   }
 
@@ -86,7 +88,11 @@ export class TestRepository {
   }
 
   public async loginInformation(): Promise<LoginInformation> {
-    return {
+    if (this._loginInformation) {
+      return this._loginInformation;
+    }
+
+    this._loginInformation = {
       authToken: (await this.codeArtifact.getAuthorizationToken({ domain: this.domain, durationSeconds: 12 * 3600 }).promise()).authorizationToken!,
       repositoryName: this.repositoryName,
       npmEndpoint: (await this.codeArtifact.getRepositoryEndpoint({ domain: this.domain, repository: this.repositoryName, format: 'npm' }).promise()).repositoryEndpoint!,
@@ -94,6 +100,7 @@ export class TestRepository {
       nugetEndpoint: (await this.codeArtifact.getRepositoryEndpoint({ domain: this.domain, repository: this.repositoryName, format: 'nuget' }).promise()).repositoryEndpoint!,
       pypiEndpoint: (await this.codeArtifact.getRepositoryEndpoint({ domain: this.domain, repository: this.repositoryName, format: 'pypi' }).promise()).repositoryEndpoint!,
     };
+    return this._loginInformation;
   }
 
   public async delete() {
@@ -108,6 +115,30 @@ export class TestRepository {
     } catch (e) {
       if (e.code !== 'ResourceNotFoundException') { throw e; }
       // Okay
+    }
+  }
+
+  /**
+   * List all packages and mark them as "allow upstream versions".
+   *
+   * If we don't do this and we publish `foo@2.3.4-rc.0`, then we can't
+   * download `foo@2.3.0` anymore because by default CodeArtifact will
+   * block different versions from the same package.
+   */
+  public async markAllUpstreamAllow() {
+    for await (const pkg of this.listPackages({ upstream: 'BLOCK' })) {
+      await this.codeArtifact.putPackageOriginConfiguration({
+        domain: this.domain,
+        repository: this.repositoryName,
+
+        format: pkg.format!,
+        package: pkg.package!,
+        namespace: pkg.namespace!,
+        restrictions: {
+          publish: 'ALLOW',
+          upstream: 'ALLOW',
+        },
+      }).promise();
     }
   }
 
@@ -183,6 +214,31 @@ export class TestRepository {
       return false;
     }
   }
+
+  private async* listPackages(filter: Pick<AWS.CodeArtifact.ListPackagesRequest, 'upstream'|'publish'|'format'> = {}) {
+    let response = await this.codeArtifact.listPackages({
+      domain: this.domain,
+      repository: this.repositoryName,
+      ...filter,
+    }).promise();
+
+    while (true) {
+      for (const p of response.packages ?? []) {
+        yield p;
+      }
+
+      if (!response.nextToken) {
+        break;
+      }
+
+      response = await this.codeArtifact.listPackages({
+        domain: this.domain,
+        repository: this.repositoryName,
+        ...filter,
+        nextToken: response.nextToken,
+      }).promise();
+    }
+  }
 }
 
 async function retry<A>(block: () => Promise<A>) {
@@ -198,6 +254,8 @@ async function retry<A>(block: () => Promise<A>) {
     }
   }
 }
+
+
 export interface LoginInformation {
   readonly authToken: string;
   readonly repositoryName: string;
