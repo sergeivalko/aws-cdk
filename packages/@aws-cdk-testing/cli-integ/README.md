@@ -52,7 +52,7 @@ $ bin/run-suite --use-source=/path/to/repo-root <SUITE_NAME>
 $ bin/run-suite -a <SUITE_NAME>
 
 # Run against a released version
-$ bin/run-suite --use-version=2.34.5 <SUITE_NAME>
+$ bin/run-suite --use-cli-release=2.34.5 <SUITE_NAME>
 ```
 
 To run a specific test, add `-t` and a substring of the test name. For example:
@@ -128,10 +128,10 @@ To run the tests in a regressory fashion, do the following:
 
 ```shell
 # Old tests, new CLI, new framework
-V0/bin/run-suite --use-version=V1 --framework-version=V1 [...]
+V0/bin/run-suite --use-cli-release=V1 --framework-version=V1 [...]
 
 # Old tests, new CLI, old framework
-V0/bin/run-suite --use-version=V1 --framework-version=V0 [...]
+V0/bin/run-suite --use-cli-release=V1 --framework-version=V0 [...]
 ```
 
 ### Patching

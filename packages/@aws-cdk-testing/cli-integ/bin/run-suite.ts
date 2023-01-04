@@ -28,7 +28,7 @@ async function main() {
       type: 'string',
       requiresArg: true,
     })
-    .option('use-version', {
+    .option('use-cli-release', {
       descripton: 'Run the current tests against the CLI at the given version',
       alias: 'u',
       type: 'string',
@@ -89,11 +89,11 @@ async function main() {
       : await autoFindRoot();
 
     usePackageSource(new RepoPackageSourceSetup(root));
-  } else if (args['use-version']) {
-    usePackageSource(new ReleasePackageSourceSetup(args['use-version'], args['framework-version']));
+  } else if (args['use-cli-release']) {
+    usePackageSource(new ReleasePackageSourceSetup(args['use-cli-release'], args['framework-version']));
   }
   if (!packageSource) {
-    throw new Error('Specify either --use-source or --use-version');
+    throw new Error('Specify either --use-source or --use-cli-release');
   }
 
   console.log(`Package source: ${packageSource.description}`);
