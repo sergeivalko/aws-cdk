@@ -222,7 +222,7 @@ async function publish(repo: TestRepository, usageDir: UsageDir, args: {
     await uploadDotnetPackages(glob.sync(path.join(directory, 'dotnet', '**', '*.nupkg')), usageDir);
   });
 
-  console.log('✅ Configuring packages for upstream versions');
+  console.log('🛍 Configuring packages for upstream versions');
   await repo.markAllUpstreamAllow();
 }
 

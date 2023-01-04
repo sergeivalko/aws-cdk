@@ -257,11 +257,13 @@ async function retry<A>(block: () => Promise<A>) {
 
 async function retryThrottled<A>(block: () => Promise<A>) {
   let time = 100;
-  let attempts = 10;
+  let attempts = 15;
   while (true) {
     try {
       return await block();
     } catch (e) {
+      // eslint-disable-next-line no-console
+      console.debug(e.message);
       if (e.code !== 'ThrottlingException') { throw e; }
       if (attempts-- === 0) { throw e; }
       await sleep(Math.floor(Math.random() * time));
