@@ -256,6 +256,7 @@ async function retry<A>(block: () => Promise<A>) {
 }
 
 async function retryThrottled<A>(block: () => Promise<A>) {
+  let time = 100;
   let attempts = 10;
   while (true) {
     try {
@@ -263,7 +264,8 @@ async function retryThrottled<A>(block: () => Promise<A>) {
     } catch (e) {
       if (e.code !== 'ThrottlingException') { throw e; }
       if (attempts-- === 0) { throw e; }
-      await sleep(1000);
+      await sleep(Math.floor(Math.random() * time));
+      time *= 2;
     }
   }
 }
